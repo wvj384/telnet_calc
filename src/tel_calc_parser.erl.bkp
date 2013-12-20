@@ -1,0 +1,86 @@
+-module(tel_calc_parser).
+-export([start_parse/1]).
+
+start_parse(Binary) -> 
+	T=parse(Binary,[],[]),
+	case T of
+		{ok, ResL} -> tel_calc_rpn:rpn(ResL);
+%		{ok, ResL} -> ResL;
+		{error, Text} -> Text
+	end.
+	
+parse(Rest,ResL, Stack) ->
+	{Number,Sign, Rest_new} = read_number(<<"">>, Rest),
+	if
+		Number=:=empty -> ResL_new=ResL;
+		true -> ResL_new=[Number | ResL]
+	end,
+	case Sign of
+		"+" ->
+			{ResL_s,Stack_n}=pop_stack_until(Stack, ResL_new, "("),
+			case Stack_n of
+				[] -> parse(Rest_new, ResL_s, [Sign]);
+				_ -> parse(Rest_new, ResL_s, [Sign | Stack_n])
+			end;
+		"-" ->
+			{ResL_s,Stack_n}=pop_stack_until(Stack, ResL_new, "("),
+                        case Stack_n of
+                                [] -> parse(Rest_new, ResL_s, [Sign]);
+                                _ -> parse(Rest_new, ResL_s, [Sign | Stack_n])
+                        end;
+		"*" -> 
+			{ResL_s,Stack_n}=pop_stack_until(Stack, ResL_new, ["+","-"]),
+                        case Stack_n of
+                                [] -> parse(Rest_new, ResL_s, [Sign]);
+                                _ -> parse(Rest_new, ResL_s, [Sign | Stack_n])
+                        end;
+		"/" -> 
+			{ResL_s,Stack_n}=pop_stack_until(Stack, ResL_new, ["+","-"]),
+                        case Stack_n of
+                                [] -> parse(Rest_new, ResL_s, [Sign]);
+                                _ -> parse(Rest_new, ResL_s, [Sign | Stack_n])
+                        end; 
+		"(" -> 
+			parse(Rest_new, ResL_new, [Sign | Stack]);
+		")" -> 	
+			{ResL_s,Stack_n}=pop_stack_until(Stack, ResL_new, "("),
+			parse(Rest_new, ResL_s, Stack_n);
+		"\r" ->
+			{Res,_}=pop_stack_until(Stack, ResL_new, stack_end),
+			{ok, lists:reverse(Res)}
+	end.
+
+pop_stack_until([], ResL, _) -> 
+	{ResL, []};
+pop_stack_until(Stack, ResL, stack_end) -> 
+	[H|T] = Stack,
+        pop_stack_until(T, [H|ResL], stack_end);
+pop_stack_until(Stack, ResL, [A,B]) ->
+	[H|T] = Stack,
+	case H of
+		A -> {ResL, Stack};
+		B -> {ResL, Stack};
+		_ -> pop_stack_until(T, [H|ResL], [A,B])
+	end;
+pop_stack_until(Stack, ResL, B) -> 
+	[H|T] = Stack,
+	case H of
+		B -> {ResL, T};
+		_ -> pop_stack_until(T, [H|ResL], B)
+	end.
+	
+read_number(Head, Rest) ->
+	Size=1,
+	<<B:Size/binary,Rest_new/binary>> = Rest,
+	B_S=binary_to_list(B),
+	try list_to_integer(B_S) of
+        	_ -> read_number(<<Head/binary,B/binary>>, Rest_new)
+        catch
+        	error:_ ->
+			io:format(~p,size(Head),  
+			case size(Head) of
+				0 -> {empty, B_S, Rest_new};
+				_ -> {binary_to_integer(Head), B_S, Rest_new}
+			end
+	end.
+

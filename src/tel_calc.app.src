@@ -1,0 +1,12 @@
+{application, tel_calc,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { tel_calc_app, []}},
+  {env, []}
+ ]}.
